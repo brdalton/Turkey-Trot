@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Turkey Race</title>
+
+<style>
+
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    text-align:center;
+    background:#87ceeb;
+}
+
+h1{
+    margin:10px;
+}
+
+#controls{
+    margin:10px;
+}
+
+#winner{
+    font-size:24px;
+    font-weight:bold;
+    min-height:35px;
+}
+
+#track{
+    position:relative;
+    width:95vw;
+    height:850px;
+    margin:auto;
+    border:4px solid #222;
+    overflow:hidden;
+
+    background:
+    repeating-linear-gradient(
+        to bottom,
+        #86c86e 0px,
+        #86c86e 50px,
+        #78bb60 50px,
+        #78bb60 100px
+    );
+}
+
+#finishLine{
+    position:absolute;
+    right:100px;
+    top:0;
+    width:12px;
+    height:100%;
+
+    background:
+    repeating-linear-gradient(
+        to bottom,
+        white 0px,
+        white 20px,
+        black 20px,
+        black 40px
+    );
+}
+
+.turkey{
+    position:absolute;
+    width:130px;
+    height:130px;
+
+    background-size:contain;
+    background-repeat:no-repeat;
+    background-position:center;
+
+    transform-origin:center center;
+    user-select:none;
+}
+
+.winnerSpin{
+    animation:winnerSpin 1s linear infinite;
+}
+
+@keyframes winnerSpin
+{
+    from{ transform:translate(-50%,-50%) rotate(0deg); }
+    to  { transform:translate(-50%,-50%) rotate(360deg); }
+}
+
+</style>
+</head>
+<body>
+
+<h1>Turkey Race</h1>
+
+<div id="controls">
+    <button id="startBtn">Start</button>
+    <button id="resetBtn">Reset</button>
+</div>
+
+<div id="winner"></div>
+
+<div id="track">
+    <div id="finishLine"></div>
+</div>
+
+<script>
+
+const turkeyImages =
+[
+    "turkeys/red.png",
+    "turkeys/blue.png",
+    "turkeys/green.png",
+    "turkeys/yellow.png",
+    "turkeys/purple.png",
+    "turkeys/orange.png"
+];
+
+const turkeyNames =
+[
+    "Red",
+    "Blue",
+    "Green",
+    "Yellow",
+    "Purple",
+    "Orange"
+];
+
+let turkeys = [];
+let raceRunning = false;
+let animationId = null;
+let gobbleTimer = null;
+
+const track = document.getElementById("track");
+const winnerText = document.getElementById("winner");
+
+const gobbleSound = new Audio("sounds/gobble.mp3");
+const cheerSound  = new Audio("sounds/cheer.mp3");
+
+gobbleSound.volume = 0.4;
+cheerSound.volume  = 0.8;
+
+function createTurkeys()
+{
+    document
+        .querySelectorAll(".turkey")
+        .forEach(x => x.remove());
+
+    turkeys = [];
+
+    for(let i=0;i<6;i++)
+    {
+        const t = document.createElement("div");
+
+        t.className = "turkey";
+
+        t.style.backgroundImage =
+            `url("${turkeyImages[i]}")`;
+
+        const turkey =
+        {
+            element: t,
+            name: turkeyNames[i],
+
+            x: 100,
+            y: 30 + i * 130,
+
+            vx: 0,
+            vy: 0,
+
+            speed: 2 + Math.random() * 2,
+
+            heading: 0,
+            targetHeading: 0,
+			facingRight: true,
+
+            angle: 0,
+
+            nextDecision:
+                performance.now() +
+                500 +
+                Math.random() * 1500
+        };
+
+        t.style.left = turkey.x + "px";
+        t.style.top  = turkey.y + "px";
+
+        track.appendChild(t);
+
+        turkeys.push(turkey);
+    }
+}
+
+function updateRace()
+{
+    if(!raceRunning) return;
+
+    const finishX =
+        track.clientWidth - 110;
+
+    const now = performance.now();
+
+    for(const t of turkeys)
+    {
+        //------------------------------------------------
+        // Every so often choose a new direction.
+        //------------------------------------------------
+
+        if(now > t.nextDecision)
+        {
+            // 75% chance generally forward
+
+            if(Math.random() < 0.75)
+            {
+                t.targetHeading =
+                    (Math.random() - 0.5) *
+                    (Math.PI * 0.8);
+            }
+
+            // 25% chance generally backward
+
+            else
+            {
+                t.targetHeading =
+                    Math.PI +
+                    (Math.random() - 0.5) *
+                    (Math.PI * 0.8);
+            }
+
+            t.speed =
+                1.5 +
+                Math.random() * 3.5;
+
+            t.nextDecision =
+                now +
+                300 +
+                Math.random() * 1500;
+        }
+
+        //------------------------------------------------
+        // Smooth turning
+        //------------------------------------------------
+
+        let delta =
+            t.targetHeading -
+            t.heading;
+
+        while(delta > Math.PI)
+            delta -= Math.PI * 2;
+
+        while(delta < -Math.PI)
+            delta += Math.PI * 2;
+
+        t.heading += delta * 0.05;
+
+        //------------------------------------------------
+        // Small wandering
+        //------------------------------------------------
+
+        t.heading +=
+            (Math.random() - 0.5) *
+            0.01;
+
+        //------------------------------------------------
+        // Velocity from heading
+        //------------------------------------------------
+
+        t.vx =
+            Math.cos(t.heading) *
+            t.speed;
+
+        t.vy =
+            Math.sin(t.heading) *
+            t.speed;
+
+        //------------------------------------------------
+        // Move
+        //------------------------------------------------
+
+        t.x += t.vx;
+        t.y += t.vy;
+
+        //------------------------------------------------
+        // Track boundaries
+        //------------------------------------------------
+
+        if(t.y < 70)
+        {
+            t.y = 70;
+            t.targetHeading =
+                Math.abs(t.targetHeading);
+        }
+
+        if(t.y >
+           track.clientHeight - 50)
+        {
+            t.y =
+                track.clientHeight - 50;
+
+            t.targetHeading =
+                -Math.abs(t.targetHeading);
+        }
+		
+		if(t.vx >= 0)
+		{
+			t.facingRight = true;
+		}
+		else{
+			t.facingRight = false;
+		}
+
+        //------------------------------------------------
+        // Visual tilt
+        //------------------------------------------------
+
+        t.angle =
+            Math.max(
+                -40,
+                Math.min(
+                    40,
+                    t.heading *
+                    180 / Math.PI
+                )
+            );
+
+        t.element.style.left =
+            t.x + "px";
+
+        t.element.style.top =
+            t.y + "px";
+
+		const flip = t.facingRight ? 1 : -1;
+
+        t.element.style.transform =
+            `translate(-50%,-50%)
+			 scaleX(${flip})
+             rotate(${t.angle}deg)`;
+
+        //------------------------------------------------
+        // Winner?
+        //------------------------------------------------
+
+        if(t.x >= finishX)
+        {
+            finishRace(t);
+            return;
+        }
+    }
+
+    handleCollisions();
+
+    animationId =
+        requestAnimationFrame(updateRace);
+}
+
+function handleCollisions()
+{
+    for(let i=0;i<turkeys.length;i++)
+    {
+        for(let j=i+1;
+            j<turkeys.length;
+            j++)
+        {
+            const a = turkeys[i];
+            const b = turkeys[j];
+
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+
+            const dist =
+                Math.sqrt(dx*dx + dy*dy);
+
+            const hitDistance = 65;
+
+            if(dist < hitDistance)
+            {
+                const nx = dx / dist;
+                const ny = dy / dist;
+
+                const push =
+                    (hitDistance - dist)
+                    * 0.5;
+
+                a.x -= nx * push;
+                a.y -= ny * push;
+
+                b.x += nx * push;
+                b.y += ny * push;
+
+                //------------------------------------------------
+                // Change their minds.
+                //------------------------------------------------
+
+                a.targetHeading +=
+                    (Math.random()-0.5)
+                    * 2.0;
+
+                b.targetHeading +=
+                    (Math.random()-0.5)
+                    * 2.0;
+            }
+        }
+    }
+}
+
+function startRace()
+{
+    if(raceRunning) return;
+
+    //audioCtx.resume();
+
+    raceRunning = true;
+
+    winnerText.textContent = "";
+
+    startGobbling();
+
+    updateRace();
+}
+
+function finishRace(winner)
+{
+    raceRunning = false;
+
+    cancelAnimationFrame(animationId);
+    clearInterval(gobbleTimer);
+
+    winnerText.textContent =
+        winner.name + " Turkey Wins!";
+
+    winner.element.classList.add("winnerSpin");
+
+    playCheer();
+}
+
+function resetRace()
+{
+    raceRunning = false;
+
+    cancelAnimationFrame(animationId);
+    clearInterval(gobbleTimer);
+
+    winnerText.textContent = "";
+
+    createTurkeys();
+}
+
+/* ---------------- AUDIO ---------------- */
+
+function playGobble()
+{
+    gobbleSound.currentTime = 0;
+    gobbleSound.play();
+}
+
+function startGobbling()
+{
+    gobbleTimer = setInterval(() =>
+    {
+        if(raceRunning)
+        {
+            if(gobbleSound.paused)
+            {
+                gobbleSound.currentTime = 0;
+                gobbleSound.play();
+            }
+        }
+    }, 0);
+}
+
+function playCheer()
+{
+	gobbleSound.pause();
+    cheerSound.currentTime = 0;
+    cheerSound.play();
+}
+
+/* ---------------- BUTTONS ---------------- */
+
+document
+.getElementById("startBtn")
+.addEventListener("click",startRace);
+
+document
+.getElementById("resetBtn")
+.addEventListener("click",resetRace);
+
+createTurkeys();
+
+</script>
+
+</body>
+</html>
